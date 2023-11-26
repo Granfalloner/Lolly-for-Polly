@@ -46,32 +46,27 @@ contract SocialFinance is Ownable {
     event LoanApplicationClosed(uint256 applicationId);
     event RepaymentDistributed(uint256 applicationId, address lender, uint256 amount);
 
-    // Constructor
     constructor() Ownable() {
     }
 
-    // Register borrower
     function registerBorrower() public {
         require(!borrowers[msg.sender].isKYCCompleted, "Borrower already registered");
         borrowers[msg.sender] = Borrower(false);
         emit BorrowerRegistered(msg.sender);
     }
 
-    // Update KYC status (only owner)
     function updateKYCStatus(address _borrower, bool _isKYCCompleted) public onlyOwner {
         require(_borrower != address(0), "Invalid borrower address");
         borrowers[_borrower].isKYCCompleted = _isKYCCompleted;
         emit KYCStatusUpdated(_borrower, _isKYCCompleted);
     }
 
-    // Register lender
     function registerLender() public {
     require(!lenders[msg.sender].isRegistered, "Lender already registered");
         lenders[msg.sender] = Lender(true);
         emit LenderRegistered(msg.sender);
     }
 
-    // Create a loan application.
     // _interestRate should be in PERCENTAGE_UNITS
     function createLoanApplication(uint256 _amount, uint256 _interestRate) public {
     require(borrowers[msg.sender].isKYCCompleted, "Borrower is not KYC verified");
@@ -88,7 +83,6 @@ contract SocialFinance is Ownable {
     emit LoanApplicationCreated(loanApplications.length - 1, _amount, _interestRate);
  }
 
-    // Fund a loan application
     function fundLoanApplication(uint256 _applicationId) public payable {
         require(_applicationId < loanApplications.length, "Invalid application ID");
         require(msg.value > 0, "Amount must be greater than 0");
@@ -153,7 +147,6 @@ contract SocialFinance is Ownable {
         emit LoanApplicationClosed(_applicationId);
     }
 
-    // Getter function for loan application details (optional)
     function getLoanApplicationDetails(uint256 _applicationId) public view returns (uint256, uint256, address, uint256, bool, bool) {
         require(_applicationId < loanApplications.length, "Invalid application ID");
         LoanApplication storage application = loanApplications[_applicationId];
@@ -166,6 +159,40 @@ contract SocialFinance is Ownable {
             application.isClosed
         );
     }
+
+    function getLenderRepayment(address lenderAddress, uint256 _applicationId) external view returns (uint256 lenderRepayment) {
+        require(_applicationId < loanApplications.length, "Invalid application ID");
+        LoanApplication storage application = loanApplications[_applicationId];
+        Contribution storage lenderContribution = application.contributions[lenderAddress];
+        if (lenderContribution.amount > 0) {
+            uint256 lendDuration = block.timestamp - lenderContribution.date;
+            lenderRepayment = lenderContribution.amount + (lenderContribution.amount * lendDuration * application.interestRate) / DENOMINATOR;
+        }
+    }
+
+    function getRepayAmount(uint256 _applicationId) external view returns (uint256 totalRepayable) {
+        require(_applicationId < loanApplications.length, "Invalid application ID");
+        LoanApplication storage application = loanApplications[_applicationId];
+        require(!application.isClosed, "Loan application is already closed");
+
+        uint256 repaymentAmount = 0;
+
+        // Iterate lenders and calculation due amounts
+        for (uint256 i = 0; i < application.lenders.length; i++) {
+            address lenderAddress = application.lenders[i];
+            Contribution storage lenderContribution = application.contributions[lenderAddress];
+            if (lenderContribution.amount > 0) {
+                uint256 lendDuration = block.timestamp - lenderContribution.date;
+                uint256 lenderRepayment = lenderContribution.amount + (lenderContribution.amount * lendDuration * application.interestRate) / DENOMINATOR;
+                repaymentAmount += lenderRepayment;
+            }
+        }
+
+        uint256 duration = block.timestamp - application.createdAt;
+        uint256 platformCommission = (application.fundedAmount * PLATFORM_COMMISSION_PERCENTAGE * duration) / DENOMINATOR;
+        totalRepayable = repaymentAmount + platformCommission;
+    }
+
    
     function withdraw() public onlyOwner {
         // Transfer platform commission to the contract owner
