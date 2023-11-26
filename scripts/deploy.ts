@@ -1,22 +1,18 @@
 import { ethers } from "hardhat";
 
 async function main() {
-  const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  const unlockTime = currentTimestampInSeconds + 60;
+  const deployerAddr = "0x0e78aBCda7D494c24c9bcB0747A97a74cab8c164";
+  const deployer = await ethers.getSigner(deployerAddr);
 
-  const lockedAmount = ethers.parseEther("0.001");
+  console.log(`Deploying contracts with the account: ${deployer.address}`);
+  console.log(`Account balance: ${(await deployer.provider.getBalance(deployerAddr)).toString()}`);
 
-  const lock = await ethers.deployContract("Lock", [unlockTime], {
-    value: lockedAmount,
-  });
 
-  await lock.waitForDeployment();
+  const sbtContract = await ethers.deployContract("SocialFinance");
+  await sbtContract.waitForDeployment();
 
-  console.log(
-    `Lock with ${ethers.formatEther(
-      lockedAmount
-    )}ETH and unlock timestamp ${unlockTime} deployed to ${lock.target}`
-  );
+  console.log(`Congratulations! You have just successfully deployed your soul bound tokens.`);
+  console.log(`SBT contract address is ${sbtContract.target}. You can verify on https://baobab.scope.klaytn.com/account/${sbtContract.target}`);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
